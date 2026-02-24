@@ -13,9 +13,6 @@ def run():
     qc, sc = get_clients()
     qvec = generate_query_embedding("great modern movies")
 
-    print("=" * 60)
-    print("TEST 03: Filter — Numeric Range (year >= 2010)")
-    print("=" * 60)
 
     # Qdrant
     t0 = time.perf_counter()

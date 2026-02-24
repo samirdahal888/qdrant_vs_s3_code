@@ -27,7 +27,6 @@ def run():
                 strategy=models.RecommendStrategy.AVERAGE_VECTOR,
             )
         ),
-        using='dense',
         limit=5,
         with_payload=True,
     )

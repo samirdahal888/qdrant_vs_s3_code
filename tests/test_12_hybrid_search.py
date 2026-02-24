@@ -4,9 +4,11 @@ import time
 
 from qdrant_client import QdrantClient, models
 
-from core.config import EMBEDDING_DIM, QDRANT_COLLECTION, QDRANT_URL, qdrant_id
+from core.config import EMBEDDING_DIM, QDRANT_URL, qdrant_id
 from core.dataset import MOVIES
 from core.embeddings import generate_movie_embeddings, generate_query_embedding
+
+COLLECTION = "movies_hybrid"  # Separate collection — don't touch shared 'movies'
 
 
 def run():
@@ -17,9 +19,9 @@ def run():
     qc = QdrantClient(url=QDRANT_URL)
     embeddings = generate_movie_embeddings(MOVIES)
 
-    # Create collection with BOTH dense and sparse vectors
+    # Create a dedicated collection with BOTH dense and sparse vectors
     qc.recreate_collection(
-        QDRANT_COLLECTION,
+        COLLECTION,
         vectors_config={
             "dense": models.VectorParams(
                 size=EMBEDDING_DIM, distance=models.Distance.COSINE
@@ -50,7 +52,7 @@ def run():
                 payload={"title": m["title"], "genre": m["genre"], "year": m["year"]},
             )
         )
-    qc.upsert(QDRANT_COLLECTION, points)
+    qc.upsert(COLLECTION, points)
 
     # Hybrid query: combine dense (semantic) + sparse (keyword)
     query_text = "space robots adventure"
@@ -59,7 +61,7 @@ def run():
 
     t0 = time.perf_counter()
     results = qc.query_points(
-        QDRANT_COLLECTION,
+        COLLECTION,
         prefetch=[
             models.Prefetch(query=dense_vec, using="dense", limit=10),
             models.Prefetch(
@@ -84,6 +86,9 @@ def run():
     print(f"\nS3 Vectors: ❌ Not supported")
     print(f"  S3 Vectors only supports dense (float32) vectors.")
     print(f"  No sparse vectors, no hybrid search, no fusion.")
+
+    # Cleanup dedicated collection
+    qc.delete_collection(COLLECTION)
 
 
 if __name__ == "__main__":

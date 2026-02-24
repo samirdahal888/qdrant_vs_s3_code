@@ -2,18 +2,20 @@
 
 import time
 
+import boto3
 from qdrant_client import QdrantClient, models
 
 from core.config import (
     AWS_REGION,
     EMBEDDING_DIM,
-    QDRANT_COLLECTION,
     QDRANT_URL,
     S3V_BUCKET_NAME,
     S3V_INDEX_NAME,
     qdrant_id,
 )
 from core.embeddings import generate_query_embedding
+
+COLLECTION = "movies_consistency"  # Separate collection — don't touch shared 'movies'
 
 
 def run():
@@ -27,7 +29,7 @@ def run():
     # ── Qdrant ─────────────────────────────────────────────────
     qc = QdrantClient(url=QDRANT_URL)
     qc.recreate_collection(
-        QDRANT_COLLECTION,
+        COLLECTION,
         vectors_config=models.VectorParams(
             size=EMBEDDING_DIM, distance=models.Distance.COSINE
         ),
@@ -35,7 +37,7 @@ def run():
 
     # Insert then immediately query
     qc.upsert(
-        QDRANT_COLLECTION,
+        COLLECTION,
         [
             models.PointStruct(
                 id=qdrant_id("test_1"), vector=test_vec, payload={"title": test_title}
@@ -43,9 +45,7 @@ def run():
         ],
     )
 
-    result = qc.query_points(
-        QDRANT_COLLECTION, query=test_vec, limit=1, with_payload=True
-    )
+    result = qc.query_points(COLLECTION, query=test_vec, limit=1, with_payload=True)
     found = result.points[0].payload["title"] == test_title if result.points else False
     print(
         f"\nQdrant: Insert → immediate query → {'FOUND ✓' if found else 'NOT FOUND ✗'}"
@@ -53,12 +53,10 @@ def run():
     print(f"  → Strong consistency: data available immediately after write")
 
     # ── S3 Vectors ─────────────────────────────────────────────
-    import boto3
-
     sc = boto3.client("s3vectors", region_name=AWS_REGION)
     try:
         sc.create_vector_bucket(vectorBucketName=S3V_BUCKET_NAME)
-    except:
+    except Exception:
         pass
     try:
         sc.create_vector_index(
@@ -67,7 +65,7 @@ def run():
             dimension=EMBEDDING_DIM,
             distanceMetric="cosine",
         )
-    except:
+    except Exception:
         pass
 
     # Insert
@@ -127,12 +125,7 @@ def run():
     print(f"\n→ Qdrant: strong consistency — always available immediately")
     print(f"→ S3 Vectors: eventual consistency — may take seconds to appear")
 
-    # Cleanup
-    sc.delete_vectors(
-        vectorBucketName=S3V_BUCKET_NAME,
-        indexName=S3V_INDEX_NAME,
-        keys=[{"key": "test_1"}],
-    )
+    qc.delete_collection(COLLECTION)
 
 
 if __name__ == "__main__":

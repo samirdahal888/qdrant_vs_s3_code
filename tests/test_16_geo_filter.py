@@ -4,8 +4,10 @@ import time
 
 from qdrant_client import QdrantClient, models
 
-from core.config import EMBEDDING_DIM, QDRANT_COLLECTION, QDRANT_URL, qdrant_id
+from core.config import EMBEDDING_DIM, QDRANT_URL, qdrant_id
 from core.embeddings import generate_query_embedding
+
+COLLECTION = "movies_geo"  # Separate collection — don't touch shared 'movies'
 
 # Synthetic: movies with filming locations
 MOVIES_WITH_LOCATION = [
@@ -41,12 +43,12 @@ def run():
 
     qc = QdrantClient(url=QDRANT_URL)
     qc.recreate_collection(
-        QDRANT_COLLECTION,
+        COLLECTION,
         vectors_config=models.VectorParams(
             size=EMBEDDING_DIM, distance=models.Distance.COSINE
         ),
     )
-    qc.create_payload_index(QDRANT_COLLECTION, "location", models.PayloadSchemaType.GEO)
+    qc.create_payload_index(COLLECTION, "location", models.PayloadSchemaType.GEO)
 
     # Insert with geo locations
     points = []
@@ -62,13 +64,13 @@ def run():
                 },
             )
         )
-    qc.upsert(QDRANT_COLLECTION, points)
+    qc.upsert(COLLECTION, points)
 
     # Search: movies filmed within 50km of Paris center
     qvec = generate_query_embedding("movies filmed in France")
     t0 = time.perf_counter()
     results = qc.query_points(
-        QDRANT_COLLECTION,
+        COLLECTION,
         query=qvec,
         limit=5,
         with_payload=True,
@@ -94,6 +96,9 @@ def run():
     print(f"\nS3 Vectors: ❌ Not supported")
     print(f"  No geo data type, no geo_radius/geo_bounding_box filters.")
     print(f"  Location-based search is impossible in S3 Vectors.")
+
+    # Cleanup dedicated collection
+    qc.delete_collection(COLLECTION)
 
 
 if __name__ == "__main__":

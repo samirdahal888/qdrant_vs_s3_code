@@ -4,9 +4,11 @@ import time
 
 from qdrant_client import QdrantClient, models
 
-from core.config import EMBEDDING_DIM, QDRANT_COLLECTION, QDRANT_URL, qdrant_id
+from core.config import EMBEDDING_DIM, QDRANT_URL, qdrant_id
 from core.dataset import MOVIES
 from core.embeddings import generate_query_embedding, get_model
+
+COLLECTION = "movies_named"  # Separate collection — don't touch shared 'movies'
 
 
 def run():
@@ -19,7 +21,7 @@ def run():
 
     # Collection with TWO named vectors per point
     qc.recreate_collection(
-        QDRANT_COLLECTION,
+        COLLECTION,
         vectors_config={
             "title": models.VectorParams(
                 size=EMBEDDING_DIM, distance=models.Distance.COSINE
@@ -42,7 +44,7 @@ def run():
                 payload={"title": m["title"], "genre": m["genre"]},
             )
         )
-    qc.upsert(QDRANT_COLLECTION, points)
+    qc.upsert(COLLECTION, points)
     print(f"  Inserted {len(points)} movies with 2 vectors each (title + description)")
 
     # Search by title similarity
@@ -52,7 +54,7 @@ def run():
     print(f'\nSearch by TITLE vector: "{query}"')
     t0 = time.perf_counter()
     title_results = qc.query_points(
-        QDRANT_COLLECTION,
+        COLLECTION,
         query=qvec,
         using="title",
         limit=5,
@@ -70,7 +72,7 @@ def run():
     print(f'\nSearch by DESCRIPTION vector: "{desc_query}"')
     t0 = time.perf_counter()
     desc_results = qc.query_points(
-        QDRANT_COLLECTION,
+        COLLECTION,
         query=desc_vec,
         using="description",
         limit=5,
@@ -81,9 +83,12 @@ def run():
         print(f"  {p.payload['title']} (score={p.score:.4f})")
     print(f"  ({ms:.0f}ms)")
 
-    print(f"\nS3 Vectors: ❌ Not supported")
+    print(f"\nS3 Vectors:  Not supported")
     print(f"  One vector per key. To search by title AND description,")
     print(f"  you'd need two separate indexes.")
+
+    # Cleanup dedicated collection
+    qc.delete_collection(COLLECTION)
 
 
 if __name__ == "__main__":

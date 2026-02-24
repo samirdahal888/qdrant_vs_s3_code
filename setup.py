@@ -158,4 +158,4 @@ def cleanup_both():
 
 
 if __name__ == "__main__":
-    setup_both()
+    setup_qdrant()
